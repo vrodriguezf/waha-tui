@@ -153,7 +153,7 @@ export function ChatsView() {
       // Create or reuse search input
       (() => {
         // Create new search input if it doesn't exist
-        if (!searchInputComponent) {
+        if (!searchInputComponent || searchInputComponent.isDestroyed) {
           searchInputComponent = createInput(renderer, {
             id: "chat-search-input",
             width: "auto",

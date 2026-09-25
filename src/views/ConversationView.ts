@@ -562,6 +562,9 @@ export function ConversationView() {
   // Remove margin when reply preview is shown (it connects to reply bar)
   // inputContainer.marginTop = state.replyingToMessage ? 0 : 0
 
+  if (messageInputComponent?.isDestroyed) messageInputComponent = null
+  if (inputScrollBar?.isDestroyed) inputScrollBar = null
+
   // Recreate input component if enterIsSend setting changed
   if (messageInputComponent && lastEnterIsSend !== null && lastEnterIsSend !== state.enterIsSend) {
     // Setting changed - destroy and recreate the input
@@ -580,9 +583,6 @@ export function ConversationView() {
   }
 
   // Initialize input component
-  if (messageInputComponent && messageInputComponent.isDestroyed) {
-    messageInputComponent = null
-  }
   if (!messageInputComponent) {
     // Get enterIsSend setting from state
     const { enterIsSend } = state
@@ -872,7 +872,7 @@ export function ConversationView() {
   let searchBar: ReturnType<typeof Box> | null = null
   if (state.isSearchActive) {
     // Create or reuse the search input
-    if (!searchInputComponent) {
+    if (!searchInputComponent || searchInputComponent.isDestroyed) {
       searchInputComponent = createInput(renderer, {
         value: state.searchQuery,
         placeholder: "Search messages...",
