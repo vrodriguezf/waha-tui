@@ -122,7 +122,7 @@ export function createRenderApp(renderer: CliRenderer): (forceRebuild?: boolean)
   // Create dialog manager (MUST BE INITIALIZED BEFORE IT IS USED)
   dialogManager = new DialogManager(renderer)
 
-  return function renderApp(forceRebuild: boolean = false): void {
+  function renderOnce(forceRebuild: boolean): void {
     const state = appState.getState()
 
     // Optimization: for selection/scroll changes in chat view, only update styles
@@ -131,13 +131,15 @@ export function createRenderApp(renderer: CliRenderer): (forceRebuild?: boolean)
       return
     }
 
-    // Clear previous render - remove all children except persistent overlays
-    // DialogContainerRenderable and ToasterRenderable must NOT be removed,
-    // as removing them destroys internal state (e.g., active dialog input focus)
-    const children = renderer.root.getChildren()
-    for (const child of children) {
-      if (child instanceof ToasterRenderable) continue
-      if (child instanceof DialogContainerRenderable) continue
+    // Keep overlays mounted and detach the old screen. Build the next screen
+    // before disposal so cached inputs and scroll boxes can be reparented.
+    const previousChildren = renderer.root
+      .getChildren()
+      .filter(
+        (child) =>
+          !(child instanceof ToasterRenderable) && !(child instanceof DialogContainerRenderable)
+      )
+    for (const child of previousChildren) {
       renderer.root.remove(child)
     }
 
@@ -185,6 +187,10 @@ export function createRenderApp(renderer: CliRenderer): (forceRebuild?: boolean)
       renderer.root.add(emojiPickerBox)
     }
 
+    for (const child of previousChildren) {
+      child.destroyRecursively()
+    }
+
     // Add dialog container once - it persists and manages its own dialog lifecycle
     // Must be added AFTER rootWrapper so it renders on top (higher z-index)
     if (!dialogContainerInitialized && dialogManager) {
@@ -202,6 +208,30 @@ export function createRenderApp(renderer: CliRenderer): (forceRebuild?: boolean)
     if (!toasterInitialized) {
       renderer.root.add(new ToasterRenderable(renderer, WHATSAPP_TOASTER_CONFIG))
       toasterInitialized = true
+    }
+  }
+
+  // Destroying a focused input can change state synchronously. Finish the
+  // current render before processing another update to avoid disposing twice.
+  let rendering = false
+  let pending = false
+  let pendingForceRebuild = false
+
+  return function renderApp(forceRebuild: boolean = false): void {
+    pending = true
+    pendingForceRebuild ||= forceRebuild
+    if (rendering) return
+
+    rendering = true
+    try {
+      do {
+        pending = false
+        const force = pendingForceRebuild
+        pendingForceRebuild = false
+        renderOnce(force)
+      } while (pending)
+    } finally {
+      rendering = false
     }
   }
 }
